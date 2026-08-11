@@ -4,3 +4,16 @@
 /.env
 /.dev.vars
 /.wrangler
+
+# Express 服务器打包产物
+/dist/
+
+# 编辑器
+.vscode/
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 日志
+*.log
