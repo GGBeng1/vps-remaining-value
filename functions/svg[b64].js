@@ -16,13 +16,32 @@ const SCHEMA = [
 
 const daysToDate = (days) => new Date(days * 86400000).toISOString().split('T')[0];
 
+// Cloudflare Workers 兼容的 atob 实现
+function atobPolyfill(base64) {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  let str = base64.replace(/=+$/, '');
+  let output = '';
+
+  if (str.length % 4 === 1) {
+    throw new Error('Invalid base64 string');
+  }
+
+  for (let bc = 0, bs = 0, buffer, i = 0; (buffer = str.charAt(i++)); ~buffer &&
+       (bs = bc % 4 ? bs * 64 + buffer : buffer, bc++ % 4) ?
+       output += String.fromCharCode(255 & bs >> (-2 * bc & 6)) : 0) {
+    buffer = chars.indexOf(buffer);
+  }
+
+  return output;
+}
+
 function decodeBase64Params(base64UrlStr) {
   if (!base64UrlStr) return {};
   let b64 = base64UrlStr.replace(/-/g, '+').replace(/_/g, '/');
   while (b64.length % 4) b64 += '=';
 
   try {
-    const binaryStr = atob(b64);
+    const binaryStr = atobPolyfill(b64);
     const buffer = new ArrayBuffer(binaryStr.length);
     const uint8Array = new Uint8Array(buffer);
     for (let i = 0; i < binaryStr.length; i++) {
@@ -78,13 +97,24 @@ function decodeBase64Params(base64UrlStr) {
   }
 }
 
-// Logo SVG (金色版本)
-const logoBase64 = 'data:image/svg+xml;base64,' + btoa(`<?xml version="1.0" standalone="no"?>
+// Base64 编码函数（Cloudflare Workers 兼容）
+function base64Encode(str) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(str);
+  const binString = Array.from(data, (byte) => String.fromCodePoint(byte)).join('');
+  return btoa(binString);
+}
+
+// Logo SVG (金色版本) - 直接内联 base64，避免运行时编码
+const logoSvg = `<?xml version="1.0" standalone="no"?>
 <!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 20010904//EN" "http://www.w3.org/TR/2001/REC-SVG-20010904/DTD/svg10.dtd">
 <svg version="1.0" xmlns="http://www.w3.org/2000/svg" width="1668.000000pt" height="1800.000000pt" viewBox="0 0 1668.000000 1800.000000" preserveAspectRatio="xMidYMid meet">
 <g transform="translate(0.000000,1800.000000) scale(0.100000,-0.100000)" fill="#D4AF37" stroke="none">
 <path d="M8775 17674 c-460 -131 -725 -458 -821 -1014 l-19 -105 3 -260 c2 -143 4 -291 5 -330 l2 -70 -85 -2..."/>
-</g></svg>`.replace(/#000000|#000\b|black/gi, '#D4AF37'));
+</g></svg>`.replace(/#000000|#000\b|black/gi, '#D4AF37');
+
+// 使用 URL 编码代替 base64（更简单，Workers 原生支持）
+const logoBase64 = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(logoSvg);
 
 export async function onRequest(context) {
   const { request } = context;

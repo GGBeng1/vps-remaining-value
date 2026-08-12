@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>部署测试</title>
+</head>
+<body>
+    <h1>✅ Cloudflare Pages 部署成功！</h1>
+    <p>如果你能看到这个页面，说明静态文件部署正常。</p>
+    <hr>
+    <h2>测试 Functions：</h2>
+    <button onclick="testAPI()">测试 /api/test</button>
+    <button onclick="testRates()">测试 /api/rates</button>
+    <pre id="result"></pre>
+
+    <script>
+        async function testAPI() {
+            const result = document.getElementById('result');
+            result.textContent = '请求中...';
+            try {
+                const res = await fetch('/api/test');
+                const data = await res.json();
+                result.textContent = '✅ /api/test 工作正常\n' + JSON.stringify(data, null, 2);
+            } catch (e) {
+                result.textContent = '❌ /api/test 失败\n' + e.message;
+            }
+        }
+
+        async function testRates() {
+            const result = document.getElementById('result');
+            result.textContent = '请求中...';
+            try {
+                const res = await fetch('/api/rates');
+                const data = await res.json();
+                result.textContent = '✅ /api/rates 工作正常\n' + JSON.stringify(data, null, 2);
+            } catch (e) {
+                result.textContent = '❌ /api/rates 失败\n' + e.message;
+            }
+        }
+    </script>
+</body>
+</html>

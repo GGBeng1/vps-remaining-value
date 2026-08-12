@@ -1,0 +1,14 @@
+name = "vps-remaining-value"
+compatibility_date = "2024-01-01"
+pages_build_output_dir = "public"
+
+# KV 命名空间用于缓存汇率
+[[kv_namespaces]]
+binding = "RATES_CACHE"
+id = "abc123def456ghi789jkl012mno345pqr"  # ← 替换成你的实际 ID
+
+# 环境变量（可选）
+[vars]
+
+# 生产环境的 secrets（需要通过 wrangler secret put 设置）
+# wrangler secret put V6_API_KEY
