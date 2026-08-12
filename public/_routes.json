@@ -2,8 +2,8 @@
   "version": 1,
   "include": [
     "/api/*",
-    "/svg/*",
-    "/vrv/*"
+    "/svg*",
+    "/vrv*"
   ],
   "exclude": []
 }

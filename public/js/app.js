@@ -146,6 +146,63 @@ function generateBase64Url(paramsObj) {
     }
     return btoa(binaryStr).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
+function decodeBase64Url(base64UrlStr) {
+    if (!base64UrlStr) return {};
+    let b64 = base64UrlStr.replace(/-/g, '+').replace(/_/g, '/');
+    while (b64.length % 4) b64 += '=';
+    try {
+        const binaryStr = atob(b64);
+        const buffer = new ArrayBuffer(binaryStr.length);
+        const uint8Array = new Uint8Array(buffer);
+        for (let i = 0; i < binaryStr.length; i++) {
+            uint8Array[i] = binaryStr.charCodeAt(i);
+        }
+        const view = new DataView(buffer);
+        const mask = view.getUint16(0);
+        const hasF64Mask = (mask & 0x8000) !== 0;
+        let f64Mask = 0;
+        let offset = 2;
+        let isLegacyF32 = false;
+        if (hasF64Mask) {
+            f64Mask = view.getUint16(offset);
+            offset += 2;
+        } else {
+            const expectedF64Len = SCHEMA.reduce((acc, s, i) =>
+                acc + ((mask & (1 << i)) ? (s.type === 'float' ? 8 : s.type === 'dict' ? 1 : 2) : 0), 2);
+            isLegacyF32 = buffer.byteLength !== expectedF64Len;
+        }
+        const outParams = {};
+        for (let i = 0; i < SCHEMA.length; i++) {
+            if ((mask & (1 << i)) !== 0) {
+                const schemaDef = SCHEMA[i];
+                if (schemaDef.type === 'float') {
+                    const isF64 = hasF64Mask ? ((f64Mask & (1 << i)) !== 0) : !isLegacyF32;
+                    if (isF64) {
+                        outParams[schemaDef.key] = Number(view.getFloat64(offset).toPrecision(15)).toString();
+                        offset += 8;
+                    } else {
+                        outParams[schemaDef.key] = Number(view.getFloat32(offset).toPrecision(7)).toString();
+                        offset += 4;
+                    }
+                } else if (schemaDef.type === 'u16') {
+                    outParams[schemaDef.key] = view.getUint16(offset).toString();
+                    offset += 2;
+                } else if (schemaDef.type === 'date') {
+                    outParams[schemaDef.key] = daysToDate(view.getUint16(offset));
+                    offset += 2;
+                } else if (schemaDef.type === 'dict') {
+                    const dictVal = view.getUint8(offset);
+                    const reverseDict = Object.fromEntries(Object.entries(schemaDef.dict).map(([k, v]) => [v, k]));
+                    outParams[schemaDef.key] = reverseDict[dictVal] || '';
+                    offset += 1;
+                }
+            }
+        }
+        return outParams;
+    } catch (e) {
+        return {};
+    }
+}
 function getUrlParamsObj() {
     const paramsObj = {};
     for (const key in els) {
@@ -296,7 +353,15 @@ document.getElementById('download-btn').addEventListener('click', async (e) => {
     URL.revokeObjectURL(a.href);
     tempText(e.target, '已下载 SVG');
 });
-const urlParams = new URLSearchParams(window.location.search);
+const vrvMatch = window.location.pathname.match(/^\/vrv([A-Za-z0-9_-]+)$/);
+let urlParams;
+if (vrvMatch) {
+    const decoded = decodeBase64Url(vrvMatch[1]);
+    urlParams = new URLSearchParams(decoded);
+    window.history.replaceState({}, '', `/?${urlParams.toString()}`);
+} else {
+    urlParams = new URLSearchParams(window.location.search);
+}
 let hasParams = false;
 Object.keys(els).forEach(key => {
     if (urlParams.has(key)) {
@@ -309,7 +374,6 @@ if (urlParams.has('er')) {
     const from = els.rc.value || 'USD';
     const to = els.tc.value || 'CNY';
     rateDisplay.value = `1 ${from} = ${currentRate} ${to}`;
-    update();
 } else {
     fetchRates();
 }
@@ -406,3 +470,6 @@ function checkEomVisibility() {
 els.ed.addEventListener('change', checkEomVisibility);
 checkEomVisibility();
 initEomCapsule();
+if (hasParams) {
+    update();
+}

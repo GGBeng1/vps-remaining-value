@@ -3,6 +3,8 @@
   "version": "0.2.0",
   "description": "VPS Remaining Value Calculator - Cloudflare Pages Edition",
   "scripts": {
+    "generate:logo": "node scripts/generate-logo.js",
+    "predeploy": "npm run generate:logo",
     "dev": "wrangler pages dev public",
     "deploy": "wrangler pages deploy public --project-name=vps-remaining-value",
     "start:express": "node server.js"

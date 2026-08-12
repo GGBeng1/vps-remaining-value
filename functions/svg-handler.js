@@ -1,122 +1,16 @@
 // SVG 生成逻辑
-const SCHEMA = [
-  { key: 'ra', type: 'float' },
-  { key: 'rc', type: 'dict', dict: {'AUD': 1, 'CAD': 2, 'CHF': 3, 'CNY': 4, 'EUR': 5, 'GBP': 6, 'HKD': 7, 'INR': 8, 'JPY': 9, 'KRW': 10, 'NZD': 11, 'RUB': 12, 'SGD': 13, 'TWD': 14, 'USD': 15} },
-  { key: 'pd', type: 'u16' },
-  { key: 'cm', type: 'dict', dict: {'real': 1, 'fixed': 2} },
-  { key: 'ed', type: 'date' },
-  { key: 'td', type: 'date' },
-  { key: 'dr', type: 'float' },
-  { key: 'pa', type: 'float' },
-  { key: 'ta', type: 'float' },
-  { key: 'tc', type: 'dict', dict: {'AUD': 1, 'CAD': 2, 'CHF': 3, 'CNY': 4, 'EUR': 5, 'GBP': 6, 'HKD': 7, 'INR': 8, 'JPY': 9, 'KRW': 10, 'NZD': 11, 'RUB': 12, 'SGD': 13, 'TWD': 14, 'USD': 15} },
-  { key: 'eom', type: 'dict', dict: {'exact': 1, 'eom': 2} },
-  { key: 'er', type: 'float' }
-];
+import { logoBase64 } from './logo-base64.js';
+import { decodeBase64Params } from './decode-params.js';
 
-const daysToDate = (days) => new Date(days * 86400000).toISOString().split('T')[0];
-
-// Cloudflare Workers 兼容的 atob 实现
-function atobPolyfill(base64) {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-  let str = base64.replace(/=+$/, '');
-  let output = '';
-
-  if (str.length % 4 === 1) {
-    throw new Error('Invalid base64 string');
-  }
-
-  for (let bc = 0, bs = 0, buffer, i = 0; (buffer = str.charAt(i++)); ~buffer &&
-       (bs = bc % 4 ? bs * 64 + buffer : buffer, bc++ % 4) ?
-       output += String.fromCharCode(255 & bs >> (-2 * bc & 6)) : 0) {
-    buffer = chars.indexOf(buffer);
-  }
-
-  return output;
+function errorSvg(message) {
+  return new Response(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="530"><text x="550" y="265" fill="#ebd288" font-size="24" text-anchor="middle">${message}</text></svg>`,
+    { headers: { 'Content-Type': 'image/svg+xml; charset=utf-8', 'Cache-Control': 'no-cache' } }
+  );
 }
-
-function decodeBase64Params(base64UrlStr) {
-  if (!base64UrlStr) return {};
-  let b64 = base64UrlStr.replace(/-/g, '+').replace(/_/g, '/');
-  while (b64.length % 4) b64 += '=';
-
-  try {
-    const binaryStr = atobPolyfill(b64);
-    const buffer = new ArrayBuffer(binaryStr.length);
-    const uint8Array = new Uint8Array(buffer);
-    for (let i = 0; i < binaryStr.length; i++) {
-      uint8Array[i] = binaryStr.charCodeAt(i);
-    }
-
-    const view = new DataView(buffer);
-    const mask = view.getUint16(0);
-    const hasF64Mask = (mask & 0x8000) !== 0;
-    let f64Mask = 0;
-    let offset = 2;
-    let isLegacyF32 = false;
-
-    if (hasF64Mask) {
-      f64Mask = view.getUint16(offset);
-      offset += 2;
-    } else {
-      const expectedF64Len = SCHEMA.reduce((acc, s, i) =>
-        acc + ((mask & (1 << i)) ? (s.type === 'float' ? 8 : s.type === 'dict' ? 1 : 2) : 0), 2);
-      isLegacyF32 = buffer.byteLength !== expectedF64Len;
-    }
-
-    const outParams = {};
-    for (let i = 0; i < SCHEMA.length; i++) {
-      if ((mask & (1 << i)) !== 0) {
-        const schemaDef = SCHEMA[i];
-        if (schemaDef.type === 'float') {
-          const isF64 = hasF64Mask ? ((f64Mask & (1 << i)) !== 0) : !isLegacyF32;
-          if (isF64) {
-            outParams[schemaDef.key] = Number(view.getFloat64(offset).toPrecision(15)).toString();
-            offset += 8;
-          } else {
-            outParams[schemaDef.key] = Number(view.getFloat32(offset).toPrecision(7)).toString();
-            offset += 4;
-          }
-        } else if (schemaDef.type === 'u16') {
-          outParams[schemaDef.key] = view.getUint16(offset).toString();
-          offset += 2;
-        } else if (schemaDef.type === 'date') {
-          outParams[schemaDef.key] = daysToDate(view.getUint16(offset));
-          offset += 2;
-        } else if (schemaDef.type === 'dict') {
-          const dictVal = view.getUint8(offset);
-          const reverseDict = Object.fromEntries(Object.entries(schemaDef.dict).map(([k, v]) => [v, k]));
-          outParams[schemaDef.key] = reverseDict[dictVal] || '';
-          offset += 1;
-        }
-      }
-    }
-    return outParams;
-  } catch (e) {
-    return {};
-  }
-}
-
-// Base64 编码函数（Cloudflare Workers 兼容）
-function base64Encode(str) {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(str);
-  const binString = Array.from(data, (byte) => String.fromCodePoint(byte)).join('');
-  return btoa(binString);
-}
-
-// Logo SVG (金色版本) - 直接内联 base64，避免运行时编码
-const logoSvg = `<?xml version="1.0" standalone="no"?>
-<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 20010904//EN" "http://www.w3.org/TR/2001/REC-SVG-20010904/DTD/svg10.dtd">
-<svg version="1.0" xmlns="http://www.w3.org/2000/svg" width="1668.000000pt" height="1800.000000pt" viewBox="0 0 1668.000000 1800.000000" preserveAspectRatio="xMidYMid meet">
-<g transform="translate(0.000000,1800.000000) scale(0.100000,-0.100000)" fill="#D4AF37" stroke="none">
-<path d="M8775 17674 c-460 -131 -725 -458 -821 -1014 l-19 -105 3 -260 c2 -143 4 -291 5 -330 l2 -70 -85 -2..."/>
-</g></svg>`.replace(/#000000|#000\b|black/gi, '#D4AF37');
-
-// 使用 URL 编码代替 base64（更简单，Workers 原生支持）
-const logoBase64 = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(logoSvg);
 
 export async function onRequest(context) {
+  try {
   const { request } = context;
   const url = new URL(request.url);
 
@@ -146,10 +40,7 @@ export async function onRequest(context) {
   const eom = params.eom || 'exact';
 
   if (!ed) {
-    return new Response(
-      `<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="530"><text x="550" y="265" fill="#ebd288" font-size="24" text-anchor="middle">缺少必要参数</text></svg>`,
-      { headers: { 'Content-Type': 'image/svg+xml; charset=utf-8', 'Cache-Control': 'no-cache' } }
-    );
+    return errorSvg('缺少必要参数');
   }
 
   // 计算剩余价值
@@ -234,6 +125,13 @@ export async function onRequest(context) {
 <animate attributeName="x1" values="-100%; 200%; 200%" dur="5s" repeatCount="indefinite"/>
 <animate attributeName="x2" values="0%; 300%; 300%" dur="5s" repeatCount="indefinite"/>
 </linearGradient>
+<filter id="glow">
+<feGaussianBlur stdDeviation="3" result="blur"/>
+<feMerge>
+<feMergeNode in="blur"/>
+<feMergeNode in="SourceGraphic"/>
+</feMerge>
+</filter>
 <clipPath id="roundCorner">
 <rect x="25" y="25" width="1150" height="580" rx="24" ry="24"/>
 </clipPath>
@@ -286,29 +184,37 @@ export async function onRequest(context) {
 <text x="456" y="210" font-size="16" opacity="0.6">交易金额 (${tc})</text>
 <text x="456" y="280" font-size="60" font-weight="700" fill="url(#g)">${ta.toFixed(3)}</text>
 <text x="456" y="310" font-size="14" opacity="0.4">${premiumLabel}金额 (${tc})</text>
-<text x="456" y="340" font-size="22" font-weight="600" fill="${color}"><tspan fill="url(#symWave)">${sign}</tspan> ${Math.abs(premiumAmount).toFixed(3)}</text>
+<text x="456" y="340" font-size="22" font-weight="600" fill="${color}" dominant-baseline="central"><tspan fill="url(#symWave)">${sign}</tspan> ${Math.abs(premiumAmount).toFixed(3)}</text>
 <text x="456" y="390" font-size="14" opacity="0.4">${premiumLabel}幅度</text>
-<text x="456" y="420" font-size="22" font-weight="600" fill="${color}"><tspan fill="url(#symWave)">${sign}</tspan> ${Math.abs(premiumRate).toFixed(3)}%</text>
+<text x="456" y="420" font-size="22" font-weight="600" fill="${color}" dominant-baseline="central"><tspan fill="url(#symWave)">${sign}</tspan> ${Math.abs(premiumRate).toFixed(3)}%</text>
 </g>`;
   }
 
   svg += `<line x1="${rightX - 40}" y1="190" x2="${rightX - 40}" y2="435" stroke="#FFFFFF" opacity="0.08"/>
 <g class="anim d3">
 <text x="${rightX}" y="205" font-size="14" opacity="0.4">续费金额</text>
-<text x="${rightX}" y="240" font-size="22" font-weight="600">${ra.toFixed(3)} ${rc}${cycleText}</text>
+<text x="${rightX}" y="240" font-size="22" font-weight="600" dominant-baseline="central">${ra.toFixed(3)} ${rc}${cycleText}</text>
 ${rc !== tc ? `<text x="${rightX}" y="270" font-size="14" opacity="0.6">≈ ${(ra * er).toFixed(3)} ${tc}${cycleText}</text>` : ''}
 <text x="${rightX}" y="310" font-size="14" opacity="0.4">剩余天数</text>
-<text x="${rightX}" y="340" font-size="22" font-weight="600">${remainDays} / ${totalCycleDays} 天</text>
+<text x="${rightX}" y="340" font-size="22" font-weight="600" dominant-baseline="central">${remainDays} / ${totalCycleDays} 天</text>
 <text x="${rightX}" y="390" font-size="14" opacity="0.4">到期时间</text>
-<text x="${rightX}" y="420" font-size="22" font-weight="600">${ed}</text>
+<text x="${rightX}" y="420" font-size="22" font-weight="600" dominant-baseline="central">${ed}</text>
 </g>
 <line x1="50" y1="480" x2="1150" y2="480" stroke="#FFFFFF" opacity="0.08"/>
 <text x="90" y="525" font-size="16" opacity="0.6">剩余比例</text>
-<text x="1110" y="525" font-size="16" font-weight="700" fill="url(#g)" text-anchor="end">${pct.toFixed(3)}%</text>
+<text x="1110" y="525" font-size="16" font-weight="700" fill="url(#g)" text-anchor="end" dominant-baseline="central">${pct.toFixed(3)}%</text>
 <rect x="90" y="545" width="1020" height="8" rx="4" fill="#202026"/>
 <rect x="90" y="545" width="${10.2 * barPct}" height="8" rx="4" fill="url(#g)">
 <animate attributeName="width" from="0" to="${10.2 * barPct}" dur="1.2s" fill="freeze" calcMode="spline" keyTimes="0; 1" keySplines="0.16 1 0.3 1"/>
 </rect>
+<clipPath id="barClip">
+<rect x="90" y="545" width="${10.2 * barPct}" height="8" rx="4"/>
+</clipPath>
+<g clip-path="url(#barClip)">
+<rect x="-110" y="545" width="200" height="8" fill="url(#shimmer)">
+<animate attributeName="x" from="-110" to="${90 + 10.2 * barPct}" dur="3.5s" begin="1.5s" repeatCount="indefinite"/>
+</rect>
+</g>
 </g>
 </g>
 </svg>`;
@@ -319,4 +225,8 @@ ${rc !== tc ? `<text x="${rightX}" y="270" font-size="14" opacity="0.6">≈ ${(r
       'Cache-Control': 'no-cache'
     }
   });
+  } catch (e) {
+    console.error('svg 生成错误:', e);
+    return errorSvg('生成失败');
+  }
 }
