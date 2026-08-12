@@ -30,8 +30,8 @@ npm install -g wrangler
 # 登录 Cloudflare
 wrangler login
 
-# 创建 KV 命名空间用于缓存汇率
-wrangler kv:namespace create "RATES_CACHE"
+# 创建 KV 命名空间用于缓存汇率（注意：使用空格，不是冒号）
+wrangler kv namespace create "RATES_CACHE"
 ```
 
 记录返回的 `id`，更新 `wrangler.toml` 中的：

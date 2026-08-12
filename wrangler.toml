@@ -5,7 +5,7 @@ pages_build_output_dir = "public"
 # KV 命名空间用于缓存汇率
 [[kv_namespaces]]
 binding = "RATES_CACHE"
-id = "your_kv_namespace_id"
+id = "27d93a2169ef4d1d805ce70255bf7212"
 
 # 环境变量
 [vars]

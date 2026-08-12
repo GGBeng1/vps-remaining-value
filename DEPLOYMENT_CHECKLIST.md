@@ -102,7 +102,7 @@ curl https://your-project.pages.dev/api/rates
 cat wrangler.toml
 
 # 检查 KV 命名空间是否正确
-wrangler kv:namespace list
+wrangler kv namespace list
 ```
 
 ### 问题 2: 汇率 API 返回 403
@@ -162,4 +162,4 @@ npm run deploy
 
 **需要帮助？**
 - [查看详细部署指南](./CLOUDFLARE_DEPLOY.md)
-- [提交 Issue](https://github.com/YoungYannick/vps-remaining-value/issues)
+- [提交 Issue](https://github.com/GGBeng1/vps-remaining-value/issues)

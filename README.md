@@ -29,7 +29,7 @@ npm install -g wrangler
 wrangler login
 
 # 创建 KV 命名空间
-wrangler kv:namespace create "RATES_CACHE"
+wrangler kv namespace create "RATES_CACHE"
 # 将返回的 id 填入 wrangler.toml
 
 # 本地测试
@@ -130,7 +130,7 @@ V6_API_KEY=your_v6_api_key_here
 
 ```bash
 # 克隆仓库
-git clone https://github.com/YoungYannick/vps-remaining-value.git
+git clone https://github.com/GGBeng1/vps-remaining-value.git
 cd vps-remaining-value
 
 # 安装依赖
@@ -167,6 +167,6 @@ MIT License
 
 ## 🔗 相关链接
 
-- [GitHub Repository](https://github.com/YoungYannick/vps-remaining-value)
+- [GitHub Repository](https://github.com/GGBeng1/vps-remaining-value)
 - [Cloudflare Pages 部署指南](./CLOUDFLARE_DEPLOY.md)
-- [问题反馈](https://github.com/YoungYannick/vps-remaining-value/issues)
+- [问题反馈](https://github.com/GGBeng1/vps-remaining-value/issues)
